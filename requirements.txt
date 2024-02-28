@@ -1,0 +1,5 @@
+utils-nuuuwan
+gig-nuuuwan
+geopandas
+shapely
+matplotlib
