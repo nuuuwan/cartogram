@@ -1,14 +1,16 @@
 import colorsys
 import os
 from functools import cache, cached_property
-
+import topojson as tp
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from gig import Ent, EntType
 from shapely.geometry import MultiPolygon, Polygon
-from utils import Log
+from utils import Log, File
 
 log = Log('Cartogram')
+os.makedirs('images', exist_ok=True)
+os.makedirs('topojson', exist_ok=True)
 
 
 def custom_timer(func):
@@ -53,7 +55,7 @@ class Cartogram:
     # Init Shape Data
     @staticmethod
     def lnglat_key(lnglat):
-        return ','.join(map(lambda x: f'{x:.5f}', lnglat))
+        return ','.join(map(lambda x: f'{x:.8f}', lnglat))
 
     @staticmethod
     def lnglat_unkey(k):
@@ -216,6 +218,10 @@ class Cartogram:
         return gpd.GeoDataFrame(
             index=[0], crs='epsg:4326', geometry=[multipolygon]
         )
+    
+    @staticmethod
+    def geo_to_topojson(geo, ):
+        return tp.Topology(geo, prequantize=False).to_json()
 
     @staticmethod
     @cache
@@ -233,16 +239,22 @@ class Cartogram:
         fig.set_size_inches(10, 10)
         for id, multipolygon in self.id_to_multipolygon.items():
             geo = Cartogram.multipolygon_to_geo(multipolygon)
+            topo = Cartogram.geo_to_topojson(geo)
+            topo_path = os.path.join('topojson', f'{id}.json')
+            File(topo_path).write(topo)
+            log.info(f'Wrote {topo_path}')
             color = Cartogram.get_color(id)
-            geo.plot(ax=ax, color=color)
-            ax.text(*self.id_to_centroid[id], id, fontsize=12)
+            geo.plot(ax=ax, facecolor=color, edgecolor='black')
+            # ax.text(*self.id_to_centroid[id], id, fontsize=12)
         plt.savefig(file_path)
         log.debug(f'Wrote {file_path}')
 
 
 if __name__ == '__main__':
-    ent_ids = Ent.ids_from_type(EntType.DISTRICT)
-    ent_ids = [id for id in ent_ids if 'LK-1' in id]
+    ent_type = EntType.DISTRICT
+    parent_id = 'LK'
+
+    ent_ids = [id for id in Ent.ids_from_type(ent_type) if id in ['LK-12', 'LK-92']]
 
     print(ent_ids)
     c = Cartogram.from_ent_ids(ent_ids)

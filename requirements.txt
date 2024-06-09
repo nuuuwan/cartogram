@@ -1,5 +1,6 @@
 utils-nuuuwan
 gig-nuuuwan
 geopandas
+topojson
 shapely
 matplotlib
