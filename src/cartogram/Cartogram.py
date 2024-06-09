@@ -78,11 +78,21 @@ class Cartogram:
         return MultiPolygon([max_polygon])
 
     def get_init_id_to_multipolygon(self):
-        return {
-            ent.id: Cartogram.raw_geo_to_multipolygon(ent.get_raw_geo())
-            for ent in self.ents
-        }
+        id_to_multipolygon = {}
+        for ent in self.ents:
+            raw_geo = ent.get_raw_geo()
+            multipolygon = Cartogram.raw_geo_to_multipolygon(raw_geo)
+            id_to_multipolygon[ent.id] = multipolygon
 
+        multipolygons = list(id_to_multipolygon.values())
+
+        geo = gpd.GeoDataFrame(geometry= gpd.GeoSeries(multipolygons))
+        topo = tp.Topology(geo, prequantize=False).to_json()
+        topo_path = os.path.join('topojson', 'all.json')
+        File(topo_path).write(topo)
+        log.debug(f'Wrote {topo_path}')
+        return id_to_multipolygon
+        
     # Scale Helpers
     @property
     @custom_timer
@@ -239,10 +249,7 @@ class Cartogram:
         fig.set_size_inches(10, 10)
         for id, multipolygon in self.id_to_multipolygon.items():
             geo = Cartogram.multipolygon_to_geo(multipolygon)
-            topo = Cartogram.geo_to_topojson(geo)
-            topo_path = os.path.join('topojson', f'{id}.json')
-            File(topo_path).write(topo)
-            log.info(f'Wrote {topo_path}')
+
             color = Cartogram.get_color(id)
             geo.plot(ax=ax, facecolor=color, edgecolor='black')
             # ax.text(*self.id_to_centroid[id], id, fontsize=12)
