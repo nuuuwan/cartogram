@@ -20,14 +20,14 @@ def custom_timer(func):
         dt_ns = time.perf_counter_ns() - t_start
         dt_ms = round(dt_ns / 1e6, 0)
         if dt_ms > 100:
-            log.debug(f'{func.__name__}: {dt_ms:,}ms')
+            log.debug(f'⌚ {func.__name__} - {dt_ms:,}ms')
         return result
 
     return wrapper
 
 
 class Cartogram:
-    LEARNING_RATE = 0.2
+    LEARNING_RATE = 0.1
     N_GENS = 10
     MIN_MAX_ERROR = 0.01
     # Construction
@@ -53,7 +53,7 @@ class Cartogram:
     # Init Shape Data
     @staticmethod
     def lnglat_key(lnglat):
-        return f'{lnglat[0]:.6f},{lnglat[1]:.6f}'
+        return ','.join(map(lambda x: f'{x:.5f}', lnglat))
 
     @staticmethod
     def lnglat_unkey(k):
@@ -72,11 +72,6 @@ class Cartogram:
             Cartogram.lnglat_normalize(lnglat) for lnglat in max_raw_polygon
         ]
         max_polygon = Polygon(max_raw_polygon)
-
-        # distance = 0.001
-        # join_style = 1
-
-        # max_polygon = max_polygon.buffer(distance=distance, join_style=join_style).buffer(distance=-distance, join_style=join_style)
 
         return MultiPolygon([max_polygon])
 
@@ -129,11 +124,15 @@ class Cartogram:
     def do_scale_multipolygon(idx, scale_factor, multipolygon):
         centroid = multipolygon.centroid.coords[0]
         lng0, lat0 = centroid
+        k_set = set()
         for polygon in multipolygon.geoms:
             for lng, lat in polygon.exterior.coords:
                 k = Cartogram.lnglat_key((lng, lat))
                 if k not in idx:
                     idx[k] = [0, 0]
+                if k in k_set:
+                    continue
+                k_set.add(k)
                 dlng, dlat = lng - lng0, lat - lat0
                 lng1, lat1 = (
                     lng0 + dlng * scale_factor,
@@ -157,11 +156,12 @@ class Cartogram:
                 for lng, lat in polygon.exterior.coords:
                     lng1, lat1 = lng, lat
                     k = Cartogram.lnglat_key((lng, lat))
-                    if k not in k_set:
-                        if k in idx:
-                            dlng, dlat = idx[k]
-                            lng1 += dlng * Cartogram.LEARNING_RATE
-                            lat1 += dlat * Cartogram.LEARNING_RATE
+                    assert k in idx
+                    dlng, dlat = idx[k]
+                    lng1 += dlng * Cartogram.LEARNING_RATE
+                    lat1 += dlat * Cartogram.LEARNING_RATE
+                    k_set.add(k) 
+
                     new_lnglat_list.append(
                         Cartogram.lnglat_normalize((lng1, lat1))
                     )
@@ -199,6 +199,7 @@ class Cartogram:
             idx = {}
             for id in self.ent_ids:
                 exp_scale_factor = self.id_to_exp_scale_factor[id]
+                log.debug(f'{id=}, {exp_scale_factor=}')
 
                 idx = Cartogram.do_scale_multipolygon(
                     idx,
@@ -240,16 +241,12 @@ class Cartogram:
 
 
 if __name__ == '__main__':
-    ent_ids = Ent.ids_from_type(EntType.PD)
-    ent_ids = [
-        id for id in ent_ids if ( 'EC-01' in id )]
+    ent_ids = Ent.ids_from_type(EntType.DISTRICT)
+    ent_ids = [id for id in ent_ids if 'LK-1' in id]
 
     print(ent_ids)
     c = Cartogram.from_ent_ids(ent_ids)
 
-    print(c.id_to_exp_area_norm)
-    print(c.id_to_area_norm)
-    print(c.id_to_exp_scale_factor)
-    print(c.id_to_centroid)
+    print('id_to_exp_scale_factor', c.id_to_exp_scale_factor)
 
     c.scale()
