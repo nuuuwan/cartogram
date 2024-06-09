@@ -160,7 +160,7 @@ class Cartogram:
                     dlng, dlat = idx[k]
                     lng1 += dlng * Cartogram.LEARNING_RATE
                     lat1 += dlat * Cartogram.LEARNING_RATE
-                    k_set.add(k) 
+                    k_set.add(k)
 
                     new_lnglat_list.append(
                         Cartogram.lnglat_normalize((lng1, lat1))
