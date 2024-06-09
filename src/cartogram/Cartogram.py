@@ -1,12 +1,14 @@
 import colorsys
 import os
 from functools import cache, cached_property
-import topojson as tp
+
 import geopandas as gpd
 import matplotlib.pyplot as plt
 from gig import Ent, EntType
 from shapely.geometry import MultiPolygon, Polygon
-from utils import Log, File
+from utils import File, Log
+
+import topojson as tp
 
 log = Log('Cartogram')
 os.makedirs('images', exist_ok=True)
@@ -77,6 +79,23 @@ class Cartogram:
 
         return MultiPolygon([max_polygon])
 
+    @staticmethod
+    @custom_timer
+    def fix_HACK(ent_ids, id_to_multipolygon):
+        multipolygons = list(id_to_multipolygon.values())
+        geo = gpd.GeoDataFrame(geometry=gpd.GeoSeries(multipolygons))
+        topo = tp.Topology(geo, prequantize=False).to_json()
+        topo_path = os.path.join('topojson', 'all.json')
+        File(topo_path).write(topo)
+        log.debug(f'Wrote {topo_path}')
+        geo2 = gpd.read_file(topo)
+        multipolygons2 = geo2.geometry
+        id_to_multipolygon = {
+            id: multipolygon
+            for id, multipolygon in zip(ent_ids, multipolygons2)
+        }
+        return id_to_multipolygon
+
     def get_init_id_to_multipolygon(self):
         id_to_multipolygon = {}
         for ent in self.ents:
@@ -84,15 +103,12 @@ class Cartogram:
             multipolygon = Cartogram.raw_geo_to_multipolygon(raw_geo)
             id_to_multipolygon[ent.id] = multipolygon
 
-        multipolygons = list(id_to_multipolygon.values())
+        id_to_multipolygon = Cartogram.fix_HACK(
+            self.ent_ids, id_to_multipolygon
+        )
 
-        geo = gpd.GeoDataFrame(geometry= gpd.GeoSeries(multipolygons))
-        topo = tp.Topology(geo, prequantize=False).to_json()
-        topo_path = os.path.join('topojson', 'all.json')
-        File(topo_path).write(topo)
-        log.debug(f'Wrote {topo_path}')
         return id_to_multipolygon
-        
+
     # Scale Helpers
     @property
     @custom_timer
@@ -228,9 +244,11 @@ class Cartogram:
         return gpd.GeoDataFrame(
             index=[0], crs='epsg:4326', geometry=[multipolygon]
         )
-    
+
     @staticmethod
-    def geo_to_topojson(geo, ):
+    def geo_to_topojson(
+        geo,
+    ):
         return tp.Topology(geo, prequantize=False).to_json()
 
     @staticmethod
@@ -258,10 +276,10 @@ class Cartogram:
 
 
 if __name__ == '__main__':
-    ent_type = EntType.DISTRICT
+    ent_type = EntType.PROVINCE
     parent_id = 'LK'
 
-    ent_ids = [id for id in Ent.ids_from_type(ent_type) if id in ['LK-12', 'LK-92']]
+    ent_ids = [id for id in Ent.ids_from_type(ent_type)]
 
     print(ent_ids)
     c = Cartogram.from_ent_ids(ent_ids)
